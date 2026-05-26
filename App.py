@@ -302,10 +302,9 @@ with tab3:
     } for ind in INDICATORS])
 
     st.dataframe(
-        df_ind.style
-            .background_gradient(subset=["Score"], cmap="RdYlGn", vmin=1, vmax=5)
-            .set_properties(**{"font-size":"12px"}),
-        use_container_width=True, height=500
+        df_ind,
+        use_container_width=True,
+        height=500
     )
 
     st.markdown("")
