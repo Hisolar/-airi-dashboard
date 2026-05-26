@@ -99,6 +99,21 @@ st.markdown("""
     .stSelectbox div { color: #111111 !important; }
     .stSlider p { color: #111111 !important; }
 
+    /* FIX: Selectbox dropdown options text */
+    .stSelectbox div[data-baseweb="select"] { background-color: #ffffff !important; }
+    .stSelectbox div[data-baseweb="select"] * { color: #111111 !important; }
+    div[data-baseweb="popover"] { background-color: #ffffff !important; }
+    div[data-baseweb="popover"] * { color: #111111 !important; }
+    div[data-baseweb="popover"] li { color: #111111 !important; background-color: #ffffff !important; }
+    div[data-baseweb="menu"] { background-color: #ffffff !important; }
+    div[data-baseweb="menu"] li { color: #111111 !important; background-color: #ffffff !important; }
+    div[data-baseweb="menu"] li:hover { background-color: #eeffee !important; }
+    ul[role="listbox"] li { color: #111111 !important; background-color: #ffffff !important; }
+    [role="option"] { color: #111111 !important; background-color: #ffffff !important; }
+    [aria-selected="true"] { background-color: #eeffee !important; }
+    [data-baseweb="select"] input { color: #111111 !important; }
+    [data-baseweb="select"] span { color: #111111 !important; }
+
     /* Download button */
     .stDownloadButton > button {
         background-color: #007700 !important;
@@ -307,36 +322,57 @@ def ch_impact(ds):
     return fig
 
 def ch_pca(df):
-    if len(df) < 3:
+    try:
+        if len(df) < 3:
+            fig = go.Figure()
+            fig.add_annotation(text="Need at least 3 assessments for PCA",
+                               showarrow=False, font=dict(size=13, color=BLACK))
+            fig.update_layout(height=360, paper_bgcolor=WHITE,
+                              xaxis=dict(visible=False), yaxis=dict(visible=False))
+            return fig
+        dim_cols = [c for c in df.columns if c not in ['AIRI_composite','AIRI_band']]
+        if len(dim_cols) < 2:
+            fig = go.Figure()
+            fig.add_annotation(text="Insufficient dimension columns for PCA",
+                               showarrow=False, font=dict(size=13, color=BLACK))
+            fig.update_layout(height=360, paper_bgcolor=WHITE,
+                              xaxis=dict(visible=False), yaxis=dict(visible=False))
+            return fig
+        X   = df[dim_cols].fillna(0).values
+        X_s = MinMaxScaler().fit_transform(X)
+        pca = PCA(n_components=min(2, X_s.shape[1]))
+        X_p = pca.fit_transform(X_s)
+        n_c = min(4, len(df))
+        clusters = KMeans(n_clusters=n_c, random_state=42, n_init='auto').fit_predict(X_s)
+        pdf = pd.DataFrame({
+            'PC1':    X_p[:,0],
+            'PC2':    X_p[:,1] if X_p.shape[1] > 1 else np.zeros(len(X_p)),
+            'Band':   df['AIRI_band'].values,
+            'Score':  df['AIRI_composite'].values,
+            'Cluster':clusters.astype(str)})
+        cmap = {'Nascent':'#cc0000','Developing':'#cc7700',
+                'Established':GREEN,'Advanced':'#0000aa'}
+        fig = px.scatter(pdf, x='PC1', y='PC2', color='Band',
+                         size='Score', hover_data=['Score'],
+                         color_discrete_map=cmap)
+        var1 = pca.explained_variance_ratio_[0]
+        var2 = pca.explained_variance_ratio_[1] if len(pca.explained_variance_ratio_) > 1 else 0
+        fig.update_layout(
+            title=dict(text=f"PCA Clustering  (PC1={var1:.0%}, PC2={var2:.0%} variance)",
+                       font=dict(size=13, color=BLACK), x=0.5),
+            plot_bgcolor=WHITE, paper_bgcolor=WHITE, height=400,
+            xaxis=dict(tickfont=dict(color=BLACK), gridcolor='#eeeeee'),
+            yaxis=dict(tickfont=dict(color=BLACK), gridcolor='#eeeeee'),
+            legend=dict(font=dict(color=BLACK)))
+        return fig
+    except Exception:
         fig = go.Figure()
-        fig.add_annotation(text="Need at least 3 assessments for PCA",
-                           showarrow=False, font=dict(size=13, color=BLACK))
+        fig.add_annotation(
+            text="PCA chart unavailable — complete more assessments to enable clustering",
+            showarrow=False, font=dict(size=13, color=BLACK))
         fig.update_layout(height=360, paper_bgcolor=WHITE,
                           xaxis=dict(visible=False), yaxis=dict(visible=False))
         return fig
-    dim_cols = [c for c in ['Strategy & Governance','Data & Technology','People & Skills','Risk & Ethics'] if c in df.columns]
-    if not dim_cols:
-        dim_cols = [c for c in df.columns if c not in ['AIRI_composite','AIRI_band']]
-    X = df[dim_cols].values
-    X_s = MinMaxScaler().fit_transform(X)
-    pca = PCA(n_components=2)
-    X_p = pca.fit_transform(X_s)
-    n_c = min(4, len(df))
-    clusters = KMeans(n_clusters=n_c, random_state=42, n_init='auto').fit_predict(X_s)
-    pdf = pd.DataFrame({'PC1':X_p[:,0], 'PC2':X_p[:,1],
-        'Band':df['AIRI_band'].values, 'Score':df['AIRI_composite'].values,
-        'Cluster':clusters.astype(str)})
-    cmap = {'Nascent':'#cc0000','Developing':'#cc7700','Established':GREEN,'Advanced':'#0000aa'}
-    fig = px.scatter(pdf, x='PC1', y='PC2', color='Band', size='Score',
-                     hover_data=['Score'], color_discrete_map=cmap)
-    fig.update_layout(
-        title=dict(text=f"PCA Clustering  (PC1={pca.explained_variance_ratio_[0]:.0%}, PC2={pca.explained_variance_ratio_[1]:.0%} variance)",
-                   font=dict(size=13, color=BLACK), x=0.5),
-        plot_bgcolor=WHITE, paper_bgcolor=WHITE, height=400,
-        xaxis=dict(tickfont=dict(color=BLACK), gridcolor='#eeeeee'),
-        yaxis=dict(tickfont=dict(color=BLACK), gridcolor='#eeeeee'),
-        legend=dict(font=dict(color=BLACK)))
-    return fig
 
 # ── SESSION STATE ──────────────────────────────────────────────────────────────
 def init():
