@@ -1,7 +1,9 @@
 """
-AIRI - AI Readiness Index for UK Debt Management
-Bournemouth University | MSc Information Technology | COMP7024 | 2025/26
-Sedara Aanuoluwapo Endurance
+=============================================================================
+AIRI (AI Readiness Index) Interactive Assessment Artifact
+For: UK Debt Management Institutions
+Built with Streamlit
+=============================================================================
 """
 
 import streamlit as st
@@ -9,715 +11,941 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-import json, os
+from plotly.subplots import make_subplots
+import json
+import os
 from datetime import datetime
+import base64
+from io import StringIO
+
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import MinMaxScaler
 import warnings
 warnings.filterwarnings('ignore')
 
-# ── PAGE CONFIG ────────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="AIRI - AI Readiness Index",
-    page_icon="🤖",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
-st.markdown("""
-<style>
-    /* White background everywhere */
-    .stApp, .main { background-color: #ffffff; }
-    .main .block-container { padding-top: 1.5rem; background-color: #ffffff; }
+def configure_page():
+    st.set_page_config(
+        page_title="AIRI - AI Readiness Index for UK Debt Management",
+        page_icon="🤖",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
 
-    /* All text black */
-    body, p, span, div, li, td, th,
-    .stMarkdown, .stMarkdown p, .stMarkdown li,
-    [data-testid="stText"] { color: #111111 !important; font-family: Arial, sans-serif; }
+    # ── ONLY THE CSS IS CHANGED — all text made visible ──────────────────────
+    st.markdown("""
+    <style>
+        /* Page background */
+        .main { background-color: #f8f9fa; }
+        .stApp { background-color: #f8f9fa; }
 
-    /* Headings */
-    h1 { color: #111111 !important; font-size: 1.9rem; font-weight: 700; }
-    h2 { color: #111111 !important; font-size: 1.3rem; font-weight: 700;
-         border-bottom: 2px solid #007700; padding-bottom: 5px; margin-top: 1.5rem; }
-    h3 { color: #111111 !important; font-size: 1.05rem; font-weight: 700; }
+        /* Headings */
+        h1 { color: #1e3a5f !important; font-family: 'Segoe UI', sans-serif; font-weight: 700; }
+        h2 { color: #2c5282 !important; font-family: 'Segoe UI', sans-serif; font-weight: 600;
+             border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+        h3 { color: #2d3748 !important; font-family: 'Segoe UI', sans-serif; font-weight: 600; }
 
-    /* Form labels */
-    label, .stSlider label,
-    .stSelectbox label,
-    [data-testid="stWidgetLabel"] { color: #111111 !important; font-weight: 500; }
+        /* Body text */
+        p, li, span { color: #2d3748; }
+        .stMarkdown p { color: #2d3748 !important; }
+        .stMarkdown li { color: #2d3748 !important; }
 
-    /* Buttons — green with white text */
-    .stButton > button {
-        background-color: #007700 !important;
-        color: #ffffff !important;
-        font-weight: 700;
-        border-radius: 4px;
-        border: none;
-        padding: 8px 20px;
+        /* Form labels */
+        label { color: #2d3748 !important; }
+        [data-testid="stWidgetLabel"] p { color: #2d3748 !important; }
+        [data-testid="stWidgetLabel"] { color: #2d3748 !important; }
+
+        /* Slider */
+        .stSlider label { color: #2d3748 !important; }
+        .stSlider p { color: #2d3748 !important; }
+
+        /* Selectbox label and selected value */
+        .stSelectbox label { color: #2d3748 !important; }
+        .stSelectbox div[data-baseweb="select"] span { color: #2d3748 !important; }
+        .stSelectbox div[data-baseweb="select"] { background-color: #ffffff !important; }
+
+        /* Dropdown popup options */
+        div[data-baseweb="popover"] { background-color: #ffffff !important; }
+        div[data-baseweb="popover"] li { color: #2d3748 !important;
+                                         background-color: #ffffff !important; }
+        div[data-baseweb="popover"] li:hover { background-color: #ebf8ff !important; }
+        div[data-baseweb="menu"] { background-color: #ffffff !important; }
+        div[data-baseweb="menu"] li { color: #2d3748 !important;
+                                      background-color: #ffffff !important; }
+        [role="option"] { color: #2d3748 !important; background-color: #ffffff !important; }
+        [aria-selected="true"] { background-color: #ebf8ff !important; }
+
+        /* Buttons */
+        .stButton > button { background-color: #2c5282; color: #ffffff !important;
+            border-radius: 8px; padding: 10px 24px; font-weight: 600; border: none; }
+        .stButton > button:hover { background-color: #1e3a5f !important;
+            color: #ffffff !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+
+        /* Download button */
+        .stDownloadButton > button { color: #ffffff !important; }
+
+        /* Sidebar */
+        [data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #e2e8f0; }
+        [data-testid="stSidebar"] h2 { color: #1e3a5f !important; }
+        [data-testid="stSidebar"] h4 { color: #2c5282 !important; }
+        [data-testid="stSidebar"] p  { color: #4a5568 !important; }
+        [data-testid="stSidebar"] .stButton > button { background-color: #2c5282 !important;
+            color: #ffffff !important; }
+        [data-testid="stSidebar"] .stButton > button:hover { background-color: #1e3a5f !important; }
+
+        /* Expander */
+        .streamlit-expanderHeader p { color: #2d3748 !important; }
+        [data-testid="stExpanderDetails"] p { color: #4a5568 !important; }
+
+        /* Metric cards */
+        .metric-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff !important; padding: 20px; border-radius: 12px; text-align: center; }
+        .metric-card * { color: #ffffff !important; }
+        .metric-value { font-size: 2.5em; font-weight: bold; margin: 10px 0;
+                        color: #ffffff !important; }
+        .metric-label { font-size: 0.9em; opacity: 0.9; text-transform: uppercase;
+                        letter-spacing: 1px; color: #ffffff !important; }
+
+        /* Metrics widget */
+        [data-testid="stMetricValue"] { color: #1e3a5f !important; font-weight: 700; }
+        [data-testid="stMetricLabel"] { color: #4a5568 !important; }
+
+        /* Dataframe */
+        .stDataFrame td { color: #2d3748 !important; }
+        .stDataFrame th { color: #2d3748 !important; }
+
+        /* Alert and notification text */
+        .stAlert p { color: #2d3748 !important; }
+        [data-testid="stNotification"] p { color: #2d3748 !important; }
+        .stWarning p { color: #744210 !important; }
+        .stError p   { color: #742a2a !important; }
+        .stSuccess p { color: #276749 !important; }
+        .stInfo p    { color: #2c5282 !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+def get_airi_dimensions():
+    conceptual_dimensions = {
+        "Data Infrastructure": {
+            "code": "D1",
+            "description": "Quality, integration, governance, and security of data assets",
+            "indicators": [
+                "Data quality standards and monitoring",
+                "Data integration across systems",
+                "Data governance framework",
+                "Data security and privacy controls",
+                "Real-time data availability"
+            ]
+        },
+        "Technological Maturity": {
+            "code": "D2",
+            "description": "Technical infrastructure and MLOps capabilities",
+            "indicators": [
+                "Cloud infrastructure readiness",
+                "MLOps and model deployment pipelines",
+                "API and integration architecture",
+                "Computational resources for AI",
+                "Monitoring and observability tools"
+            ]
+        },
+        "Regulatory Compliance": {
+            "code": "D3",
+            "description": "FCA compliance, data protection, cybersecurity, vulnerability protocols",
+            "indicators": [
+                "FCA Consumer Duty alignment",
+                "GDPR and data protection compliance",
+                "Cybersecurity framework",
+                "Vulnerable customer protocols",
+                "Audit trail and documentation"
+            ]
+        },
+        "Organisational Capacities": {
+            "code": "D4",
+            "description": "Leadership, skills, culture, and resources for AI adoption",
+            "indicators": [
+                "Executive AI leadership and sponsorship",
+                "AI literacy and training programs",
+                "Cross-functional AI teams",
+                "Change management capability",
+                "Budget and resource allocation"
+            ]
+        },
+        "Ethical Governance": {
+            "code": "D5",
+            "description": "Bias mitigation, fairness, transparency, and consumer protection",
+            "indicators": [
+                "Algorithmic bias detection and mitigation",
+                "Explainability and interpretability frameworks",
+                "Fairness assessment procedures",
+                "Consumer protection safeguards",
+                "Ethical review board or committee"
+            ]
+        }
     }
-    .stButton > button:hover {
-        background-color: #005500 !important;
-        color: #ffffff !important;
+
+    analytical_dimensions = {
+        "Strategy_Governance": {
+            "description": "AI strategy, decision rights, oversight, and FCA alignment",
+            "weight": 0.25, "color": "#2c5282",
+            "items": ["Q27","Q28","Q29","Q30","Q31","Q32","Q33","Q34"]
+        },
+        "Data_Technology": {
+            "description": "Data infrastructure, MLOps, integration, and security",
+            "weight": 0.25, "color": "#38a169",
+            "items": ["Q11","Q12","Q13","Q14","Q15","Q16","Q17","Q18","Q19","Q20"]
+        },
+        "People_Skills": {
+            "description": "Leadership, skills, culture, and resources",
+            "weight": 0.25, "color": "#d69e2e",
+            "items": ["Q21","Q22","Q23","Q24","Q25","Q26"]
+        },
+        "Risk_Ethics": {
+            "description": "Bias mitigation, explainability, accountability, and Consumer Duty",
+            "weight": 0.25, "color": "#e53e3e",
+            "items": ["Q35","Q36","Q37","Q38","Q39","Q40","Q41"]
+        }
     }
+    return conceptual_dimensions, analytical_dimensions
 
-    /* Sidebar — white background, black text */
-    [data-testid="stSidebar"] {
-        background-color: #f8f8f8;
-        border-right: 2px solid #dddddd;
-    }
-    [data-testid="stSidebar"] * { color: #111111 !important; }
-    [data-testid="stSidebar"] .stButton > button {
-        background-color: #007700 !important;
-        color: #ffffff !important;
-        font-weight: 600;
-        margin-bottom: 4px;
-    }
-    [data-testid="stSidebar"] .stButton > button:hover {
-        background-color: #005500 !important;
-    }
 
-    /* Expander */
-    .streamlit-expanderHeader { color: #111111 !important; font-weight: 600; }
-    .streamlit-expanderHeader p { color: #111111 !important; }
-    .streamlit-expanderContent p { color: #111111 !important; }
-    [data-testid="stExpanderDetails"] p { color: #111111 !important; }
-
-    /* Metrics */
-    [data-testid="stMetricValue"] { color: #007700 !important; font-weight: 700; }
-    [data-testid="stMetricLabel"] { color: #111111 !important; }
-
-    /* Tables */
-    .stDataFrame td { color: #111111 !important; }
-    .stDataFrame th { color: #111111 !important; background-color: #f0f0f0 !important; }
-
-    /* Alert boxes */
-    .stAlert p { color: #111111 !important; }
-    [data-testid="stNotification"] p { color: #111111 !important; }
-
-    /* Selectbox and slider text */
-    .stSelectbox div { color: #111111 !important; }
-    .stSlider p { color: #111111 !important; }
-
-    /* FIX: Selectbox dropdown options text */
-    .stSelectbox div[data-baseweb="select"] { background-color: #ffffff !important; }
-    .stSelectbox div[data-baseweb="select"] * { color: #111111 !important; }
-    div[data-baseweb="popover"] { background-color: #ffffff !important; }
-    div[data-baseweb="popover"] * { color: #111111 !important; }
-    div[data-baseweb="popover"] li { color: #111111 !important; background-color: #ffffff !important; }
-    div[data-baseweb="menu"] { background-color: #ffffff !important; }
-    div[data-baseweb="menu"] li { color: #111111 !important; background-color: #ffffff !important; }
-    div[data-baseweb="menu"] li:hover { background-color: #eeffee !important; }
-    ul[role="listbox"] li { color: #111111 !important; background-color: #ffffff !important; }
-    [role="option"] { color: #111111 !important; background-color: #ffffff !important; }
-    [aria-selected="true"] { background-color: #eeffee !important; }
-    [data-baseweb="select"] input { color: #111111 !important; }
-    [data-baseweb="select"] span { color: #111111 !important; }
-
-    /* Download button */
-    .stDownloadButton > button {
-        background-color: #007700 !important;
-        color: #ffffff !important;
-        font-weight: 700;
-        border-radius: 4px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# ── CONSTANTS ──────────────────────────────────────────────────────────────────
-GREEN      = "#007700"
-DKGREEN    = "#005500"
-BLACK      = "#111111"
-WHITE      = "#ffffff"
-LIGHTGREY  = "#f4f4f4"
-GREY       = "#dddddd"
-LINEGREEN  = "#007700"
-
-# ── READINESS BANDS ────────────────────────────────────────────────────────────
-def get_bands():
+def get_readiness_bands():
     return {
-        "Nascent":     {"min":0,  "max":25,  "bg":"#ffeeee","border":"#cc0000","text":"#cc0000",
-            "desc":"Fundamental gaps in AI readiness. Early-stage exploration with limited infrastructure, governance, or skills.",
-            "recs":["Establish basic data governance policies","Develop initial AI strategy and roadmap",
-                    "Conduct AI literacy training for leadership","Review FCA Consumer Duty requirements",
-                    "Create ethical AI principles document"]},
-        "Developing":  {"min":26, "max":50,  "bg":"#fff8e0","border":"#cc7700","text":"#885500",
-            "desc":"Building core capabilities. Partial implementation with identified gaps in technology, governance, or workforce.",
-            "recs":["Implement data quality monitoring tools","Establish MLOps pipelines for model deployment",
-                    "Expand AI training to operational staff","Develop vulnerability-sensitive customer protocols",
-                    "Create model explainability frameworks"]},
-        "Established": {"min":51, "max":75,  "bg":"#eeffee","border":"#007700","text":"#005500",
-            "desc":"Mature AI practices. Operational AI with robust governance, compliance, and continuous monitoring.",
-            "recs":["Optimise AI model performance and drift monitoring","Enhance cross-functional AI governance committees",
-                    "Implement advanced bias detection algorithms","Develop peer benchmarking capabilities",
-                    "Create automated compliance reporting"]},
-        "Advanced":    {"min":76, "max":100, "bg":"#eeeeff","border":"#000088","text":"#000088",
-            "desc":"Leading-edge AI readiness. Continuous innovation, proactive governance, and industry-leading practices.",
-            "recs":["Pioneer new AI governance standards","Develop AI-driven regulatory horizon scanning",
-                    "Create industry collaboration frameworks","Implement real-time ethical AI monitoring",
-                    "Establish AI research and innovation labs"]},
+        "Nascent": {
+            "min": 0, "max": 25, "color": "#fc8181", "dark_color": "#c53030",
+            "description": "Fundamental gaps in AI readiness. Early-stage exploration with limited infrastructure, governance, or skills.",
+            "recommendations": [
+                "Establish basic data governance policies",
+                "Develop initial AI strategy and roadmap",
+                "Conduct AI literacy training for leadership",
+                "Review FCA Consumer Duty requirements",
+                "Create ethical AI principles document"
+            ]
+        },
+        "Developing": {
+            "min": 26, "max": 50, "color": "#fbd38d", "dark_color": "#c05621",
+            "description": "Building core capabilities. Partial implementation with identified gaps in technology, governance, or workforce.",
+            "recommendations": [
+                "Implement data quality monitoring tools",
+                "Establish MLOps pipelines for model deployment",
+                "Expand AI training to operational staff",
+                "Develop vulnerability-sensitive customer protocols",
+                "Create model explainability frameworks"
+            ]
+        },
+        "Established": {
+            "min": 51, "max": 75, "color": "#9ae6b4", "dark_color": "#276749",
+            "description": "Mature AI practices. Operational AI with robust governance, compliance, and continuous monitoring.",
+            "recommendations": [
+                "Optimize AI model performance and drift monitoring",
+                "Enhance cross-functional AI governance committees",
+                "Implement advanced bias detection algorithms",
+                "Develop peer benchmarking capabilities",
+                "Create automated compliance reporting"
+            ]
+        },
+        "Advanced": {
+            "min": 76, "max": 100, "color": "#90cdf4", "dark_color": "#2c5282",
+            "description": "Leading-edge AI readiness. Continuous innovation, proactive governance, and industry-leading practices.",
+            "recommendations": [
+                "Pioneer new AI governance standards",
+                "Develop AI-driven regulatory horizon scanning",
+                "Create industry collaboration frameworks",
+                "Implement real-time ethical AI monitoring",
+                "Establish AI research and innovation labs"
+            ]
+        }
     }
 
-def get_conceptual_dims():
+
+def generate_survey_questions():
     return {
-        "Data Infrastructure":       {"code":"D1","desc":"Quality, integration, governance, and security of data assets",
-            "inds":["Data quality standards and monitoring","Data integration across systems",
-                    "Data governance framework","Data security and privacy controls","Real-time data availability"]},
-        "Technological Maturity":    {"code":"D2","desc":"Technical infrastructure and MLOps capabilities",
-            "inds":["Cloud infrastructure readiness","MLOps and model deployment pipelines",
-                    "API and integration architecture","Computational resources for AI","Monitoring and observability tools"]},
-        "Regulatory Compliance":     {"code":"D3","desc":"FCA compliance, data protection, cybersecurity, vulnerability protocols",
-            "inds":["FCA Consumer Duty alignment","GDPR and data protection compliance",
-                    "Cybersecurity framework","Vulnerable customer protocols","Audit trail and documentation"]},
-        "Organisational Capability": {"code":"D4","desc":"Leadership, skills, culture, and resources for AI adoption",
-            "inds":["Executive AI leadership and sponsorship","AI literacy and training programs",
-                    "Cross-functional AI teams","Change management capability","Budget and resource allocation"]},
-        "Ethical Governance":        {"code":"D5","desc":"Bias mitigation, fairness, transparency, and consumer protection",
-            "inds":["Algorithmic bias detection and mitigation","Explainability and interpretability frameworks",
-                    "Fairness assessment procedures","Consumer protection safeguards","Ethical review board or committee"]},
+        "Strategy_Governance": [
+            {"id":"Q27","text":"Our organisation has a documented AI strategy aligned with business objectives and FCA expectations.","dimension":"Strategy_Governance","sub_dimension":"AI Strategy"},
+            {"id":"Q28","text":"Clear decision rights and accountability structures exist for AI system deployment and oversight.","dimension":"Strategy_Governance","sub_dimension":"Decision Rights"},
+            {"id":"Q29","text":"We have established AI governance committees with cross-functional representation (IT, Risk, Compliance, Legal).","dimension":"Strategy_Governance","sub_dimension":"Governance Structure"},
+            {"id":"Q30","text":"Our AI governance framework explicitly addresses the FCA Consumer Duty requirements for fair outcomes.","dimension":"Strategy_Governance","sub_dimension":"FCA Alignment"},
+            {"id":"Q31","text":"We maintain comprehensive audit trails for all AI-driven decisions affecting customers.","dimension":"Strategy_Governance","sub_dimension":"Audit & Accountability"},
+            {"id":"Q32","text":"Regular board-level reviews of AI risks, performance, and strategic alignment are conducted.","dimension":"Strategy_Governance","sub_dimension":"Board Oversight"},
+            {"id":"Q33","text":"Our organisation has defined AI risk appetite statements integrated into enterprise risk management.","dimension":"Strategy_Governance","sub_dimension":"Risk Appetite"},
+            {"id":"Q34","text":"We have established clear escalation procedures for AI incidents and customer complaints.","dimension":"Strategy_Governance","sub_dimension":"Incident Management"},
+        ],
+        "Data_Technology": [
+            {"id":"Q11","text":"Our data infrastructure supports real-time or near-real-time data processing for AI applications.","dimension":"Data_Technology","sub_dimension":"Data Infrastructure"},
+            {"id":"Q12","text":"Data quality is systematically monitored with defined metrics and remediation procedures.","dimension":"Data_Technology","sub_dimension":"Data Quality"},
+            {"id":"Q13","text":"We have implemented data lineage tracking to understand data provenance for AI model inputs.","dimension":"Data_Technology","sub_dimension":"Data Lineage"},
+            {"id":"Q14","text":"Our organisation has cloud-based or scalable on-premise infrastructure for AI model training and deployment.","dimension":"Data_Technology","sub_dimension":"Cloud Infrastructure"},
+            {"id":"Q15","text":"MLOps practices (version control, CI/CD, model registry) are implemented for AI lifecycle management.","dimension":"Data_Technology","sub_dimension":"MLOps"},
+            {"id":"Q16","text":"APIs and integration layers enable seamless data flow between operational systems and AI platforms.","dimension":"Data_Technology","sub_dimension":"Integration"},
+            {"id":"Q17","text":"We have adequate computational resources (GPU/TPU) for training and inference of AI models.","dimension":"Data_Technology","sub_dimension":"Compute Resources"},
+            {"id":"Q18","text":"Data security controls (encryption, access controls, anonymization) meet financial services standards.","dimension":"Data_Technology","sub_dimension":"Data Security"},
+            {"id":"Q19","text":"Monitoring and observability tools track AI model performance, drift, and operational health.","dimension":"Data_Technology","sub_dimension":"Monitoring"},
+            {"id":"Q20","text":"Our data architecture supports integration of structured and unstructured data for AI applications.","dimension":"Data_Technology","sub_dimension":"Data Architecture"},
+        ],
+        "People_Skills": [
+            {"id":"Q21","text":"Executive leadership demonstrates visible commitment and sponsorship for AI initiatives.","dimension":"People_Skills","sub_dimension":"Leadership"},
+            {"id":"Q22","text":"We have conducted AI literacy assessments and identified skill gaps across the organisation.","dimension":"People_Skills","sub_dimension":"AI Literacy"},
+            {"id":"Q23","text":"Role-based AI training programs are available for technical and non-technical staff.","dimension":"People_Skills","sub_dimension":"Training Programs"},
+            {"id":"Q24","text":"Cross-functional AI teams (data scientists, engineers, domain experts) are established and resourced.","dimension":"People_Skills","sub_dimension":"Team Structure"},
+            {"id":"Q25","text":"Change management processes support AI adoption and address workforce transition concerns.","dimension":"People_Skills","sub_dimension":"Change Management"},
+            {"id":"Q26","text":"We have access to external AI expertise (consultants, vendors, academic partnerships) when needed.","dimension":"People_Skills","sub_dimension":"External Expertise"},
+        ],
+        "Risk_Ethics": [
+            {"id":"Q35","text":"We have implemented procedures to detect and mitigate algorithmic bias in AI models.","dimension":"Risk_Ethics","sub_dimension":"Bias Mitigation"},
+            {"id":"Q36","text":"AI model decisions can be explained to regulators, customers, and internal stakeholders.","dimension":"Risk_Ethics","sub_dimension":"Explainability"},
+            {"id":"Q37","text":"Fairness assessments are conducted regularly to ensure equitable outcomes across customer segments.","dimension":"Risk_Ethics","sub_dimension":"Fairness"},
+            {"id":"Q38","text":"Our AI systems incorporate vulnerability-sensitive design for financially distressed customers.","dimension":"Risk_Ethics","sub_dimension":"Vulnerability Sensitivity"},
+            {"id":"Q39","text":"Human-in-the-loop protocols ensure meaningful oversight of high-stakes AI decisions.","dimension":"Risk_Ethics","sub_dimension":"Human Oversight"},
+            {"id":"Q40","text":"Ethical review processes evaluate AI use cases before deployment.","dimension":"Risk_Ethics","sub_dimension":"Ethical Review"},
+            {"id":"Q41","text":"We have documented procedures for handling AI-related customer complaints and remediation.","dimension":"Risk_Ethics","sub_dimension":"Consumer Protection"},
+        ]
     }
 
-def get_questions():
-    return {
-        "Strategy & Governance": [
-            {"id":"Q27","text":"Our organisation has a documented AI strategy aligned with business objectives and FCA expectations.","sub":"AI Strategy"},
-            {"id":"Q28","text":"Clear decision rights and accountability structures exist for AI system deployment and oversight.","sub":"Decision Rights"},
-            {"id":"Q29","text":"We have established AI governance committees with cross-functional representation (IT, Risk, Compliance, Legal).","sub":"Governance Structure"},
-            {"id":"Q30","text":"Our AI governance framework explicitly addresses the FCA Consumer Duty requirements for fair outcomes.","sub":"FCA Alignment"},
-            {"id":"Q31","text":"We maintain comprehensive audit trails for all AI-driven decisions affecting customers.","sub":"Audit & Accountability"},
-            {"id":"Q32","text":"Regular board-level reviews of AI risks, performance, and strategic alignment are conducted.","sub":"Board Oversight"},
-            {"id":"Q33","text":"Our organisation has defined AI risk appetite statements integrated into enterprise risk management.","sub":"Risk Appetite"},
-            {"id":"Q34","text":"We have established clear escalation procedures for AI incidents and customer complaints.","sub":"Incident Management"},
-        ],
-        "Data & Technology": [
-            {"id":"Q11","text":"Our data infrastructure supports real-time or near-real-time data processing for AI applications.","sub":"Data Infrastructure"},
-            {"id":"Q12","text":"Data quality is systematically monitored with defined metrics and remediation procedures.","sub":"Data Quality"},
-            {"id":"Q13","text":"We have implemented data lineage tracking to understand data provenance for AI model inputs.","sub":"Data Lineage"},
-            {"id":"Q14","text":"Our organisation has cloud-based or scalable on-premise infrastructure for AI model training and deployment.","sub":"Cloud Infrastructure"},
-            {"id":"Q15","text":"MLOps practices (version control, CI/CD, model registry) are implemented for AI lifecycle management.","sub":"MLOps"},
-            {"id":"Q16","text":"APIs and integration layers enable seamless data flow between operational systems and AI platforms.","sub":"Integration"},
-            {"id":"Q17","text":"We have adequate computational resources (GPU/TPU) for training and inference of AI models.","sub":"Compute Resources"},
-            {"id":"Q18","text":"Data security controls (encryption, access controls, anonymization) meet financial services standards.","sub":"Data Security"},
-            {"id":"Q19","text":"Monitoring and observability tools track AI model performance, drift, and operational health.","sub":"Monitoring"},
-            {"id":"Q20","text":"Our data architecture supports integration of structured and unstructured data for AI applications.","sub":"Data Architecture"},
-        ],
-        "People & Skills": [
-            {"id":"Q21","text":"Executive leadership demonstrates visible commitment and sponsorship for AI initiatives.","sub":"Leadership"},
-            {"id":"Q22","text":"We have conducted AI literacy assessments and identified skill gaps across the organisation.","sub":"AI Literacy"},
-            {"id":"Q23","text":"Role-based AI training programs are available for technical and non-technical staff.","sub":"Training Programs"},
-            {"id":"Q24","text":"Cross-functional AI teams (data scientists, engineers, domain experts) are established and resourced.","sub":"Team Structure"},
-            {"id":"Q25","text":"Change management processes support AI adoption and address workforce transition concerns.","sub":"Change Management"},
-            {"id":"Q26","text":"We have access to external AI expertise (consultants, vendors, academic partnerships) when needed.","sub":"External Expertise"},
-        ],
-        "Risk & Ethics": [
-            {"id":"Q35","text":"We have implemented procedures to detect and mitigate algorithmic bias in AI models.","sub":"Bias Mitigation"},
-            {"id":"Q36","text":"AI model decisions can be explained to regulators, customers, and internal stakeholders.","sub":"Explainability"},
-            {"id":"Q37","text":"Fairness assessments are conducted regularly to ensure equitable outcomes across customer segments.","sub":"Fairness"},
-            {"id":"Q38","text":"Our AI systems incorporate vulnerability-sensitive design for financially distressed customers.","sub":"Vulnerability Sensitivity"},
-            {"id":"Q39","text":"Human-in-the-loop protocols ensure meaningful oversight of high-stakes AI decisions.","sub":"Human Oversight"},
-            {"id":"Q40","text":"Ethical review processes evaluate AI use cases before deployment.","sub":"Ethical Review"},
-            {"id":"Q41","text":"We have documented procedures for handling AI-related customer complaints and remediation.","sub":"Consumer Protection"},
-        ],
-    }
 
-# ── SCORING ────────────────────────────────────────────────────────────────────
-def norm(raw, mn=0, mx=8):
-    if mx == mn: return 50.0
-    return max(0.0, min(100.0, (raw - mn) / (mx - mn) * 100))
+def normalize_score(raw_score, min_val=0, max_val=8):
+    if max_val == min_val:
+        return 50.0
+    normalized = ((raw_score - min_val) / (max_val - min_val)) * 100
+    return max(0, min(100, normalized))
 
-def dim_score(responses, qs):
-    vals = [norm(responses[q["id"]]) for q in qs if q["id"] in responses]
-    return round(float(np.mean(vals)), 2) if vals else 0.0
 
-def composite(dim_scores):
-    return round(float(np.mean(list(dim_scores.values()))), 2)
+def compute_dimension_score(responses, dimension_questions):
+    scores = []
+    for q in dimension_questions:
+        q_id = q["id"]
+        if q_id in responses:
+            raw = responses[q_id]
+            norm = normalize_score(raw)
+            scores.append(norm)
+    if not scores:
+        return 0.0
+    return np.mean(scores)
 
-def classify(score):
-    for name, b in get_bands().items():
-        if name == "Advanced":
-            if b["min"] <= score <= b["max"]: return name
+
+def compute_composite_airi(dimension_scores, weights=None):
+    if weights is None:
+        weights = {dim: 1.0/len(dimension_scores) for dim in dimension_scores}
+    composite = sum(dimension_scores[dim] * weights.get(dim, 0.25)
+                    for dim in dimension_scores)
+    return composite
+
+
+def classify_readiness_band(score):
+    bands = get_readiness_bands()
+    for band_name, band_info in bands.items():
+        if band_name == "Advanced":
+            if band_info["min"] <= score <= band_info["max"]:
+                return band_name
         else:
-            if b["min"] <= score < b["max"]: return name
+            if band_info["min"] <= score < band_info["max"]:
+                return band_name
     return "Unknown"
 
-# ── CHARTS ─────────────────────────────────────────────────────────────────────
-def ch_radar(ds, title="AIRI Dimension Profile"):
-    cats = list(ds.keys()); vals = list(ds.values())
-    cc = cats + [cats[0]]; vc = vals + [vals[0]]
+
+def create_radar_chart(dimension_scores, title="AIRI Dimension Profile"):
+    categories = list(dimension_scores.keys())
+    values = list(dimension_scores.values())
+    categories_closed = categories + [categories[0]]
+    values_closed = values + [values[0]]
     fig = go.Figure()
-    fig.add_trace(go.Scatterpolar(r=vc, theta=cc, fill='toself',
-        fillcolor='rgba(0,119,0,0.12)', line=dict(color=GREEN, width=2.5), name='Score'))
-    for v, lbl in [(25,'Nascent'),(50,'Developing'),(75,'Established')]:
-        fig.add_trace(go.Scatterpolar(r=[v]*(len(cats)+1), theta=cc, mode='lines',
-            line=dict(dash='dot', width=1, color='#999999'), name=lbl, opacity=0.7))
+    fig.add_trace(go.Scatterpolar(
+        r=values_closed, theta=categories_closed, fill='toself',
+        fillcolor='rgba(44,82,130,0.3)', line=dict(color='#2c5282',width=3), name='Current Score'))
+    for band, band_val in [("Nascent",25),("Developing",50),("Established",75)]:
+        fig.add_trace(go.Scatterpolar(
+            r=[band_val]*(len(categories)+1), theta=categories_closed, mode='lines',
+            line=dict(dash='dash',width=1,color='gray'), name=f'{band} Threshold', opacity=0.5))
     fig.update_layout(
         polar=dict(
-            radialaxis=dict(visible=True, range=[0,100], tickvals=[0,25,50,75,100],
-                tickfont=dict(size=10, color=BLACK), gridcolor='#cccccc'),
-            angularaxis=dict(tickfont=dict(size=11, color=BLACK)),
-            bgcolor=WHITE),
+            radialaxis=dict(visible=True, range=[0,100], tickfont=dict(size=10),
+                            tickvals=[0,25,50,75,100], ticktext=['0','25','50','75','100']),
+            angularaxis=dict(tickfont=dict(size=12, color='#2d3748')),
+            bgcolor='rgba(248,249,250,0.8)'),
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.25,
-                    xanchor="center", x=0.5, font=dict(color=BLACK, size=10)),
-        title=dict(text=title, font=dict(size=15, color=BLACK), x=0.5),
-        paper_bgcolor=WHITE, height=440, margin=dict(t=60, b=90))
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+        title=dict(text=title, font=dict(size=20, color='#1e3a5f'), x=0.5),
+        paper_bgcolor='white', height=500)
     return fig
 
-def ch_bar(ds):
-    dims = list(ds.keys()); scores = list(ds.values())
-    colors = ['#ffcccc' if s<25 else '#ffe8a0' if s<50 else '#bbffbb' if s<75 else '#aaccff' for s in scores]
-    fig = go.Figure(go.Bar(x=scores, y=dims, orientation='h',
-        marker=dict(color=colors, line=dict(color='#333333', width=0.8)),
+
+def create_dimension_bar_chart(dimension_scores):
+    dimensions = list(dimension_scores.keys())
+    scores = list(dimension_scores.values())
+    colors = []
+    for score in scores:
+        if score < 25:   colors.append('#fc8181')
+        elif score < 50: colors.append('#fbd38d')
+        elif score < 75: colors.append('#9ae6b4')
+        else:            colors.append('#90cdf4')
+    fig = go.Figure(data=[go.Bar(
+        x=scores, y=dimensions, orientation='h',
+        marker=dict(color=colors, line=dict(color='white',width=2)),
         text=[f'{s:.1f}' for s in scores], textposition='auto',
-        textfont=dict(size=12, color=BLACK)))
-    for v, lbl in [(25,'Nascent'),(50,'Developing'),(75,'Established')]:
-        fig.add_vline(x=v, line_dash="dash", line_color='#666666', line_width=1.2,
-                      annotation_text=lbl, annotation_font=dict(color=BLACK, size=10))
+        textfont=dict(size=14, color='white', family='Arial Black'))])
+    for val, label, color in [(25,'Nascent','#c53030'),(50,'Developing','#c05621'),(75,'Established','#276749')]:
+        fig.add_vline(x=val, line_dash="dash", line_color=color,
+                      annotation_text=label, annotation_position="top")
     fig.update_layout(
-        xaxis=dict(range=[0,110], title=dict(text="Score (0–100)", font=dict(color=BLACK)),
-                   tickfont=dict(color=BLACK), gridcolor='#eeeeee'),
-        yaxis=dict(tickfont=dict(color=BLACK, size=11)),
-        title=dict(text="Dimension Score Breakdown", font=dict(size=15, color=BLACK), x=0.5),
-        plot_bgcolor=WHITE, paper_bgcolor=WHITE,
-        height=360, margin=dict(l=170, r=60, t=50, b=50))
+        xaxis=dict(range=[0,100], title=dict(text="Score (0-100)",font=dict(size=14)), tickfont=dict(size=12)),
+        yaxis=dict(tickfont=dict(size=13)),
+        title=dict(text="Dimension Score Breakdown", font=dict(size=18,color='#1e3a5f'), x=0.5),
+        plot_bgcolor='white', paper_bgcolor='white', height=400, margin=dict(l=150))
     return fig
 
-def ch_gauge(score):
-    band = classify(score)
-    binfo = get_bands()[band]
+
+def create_gauge_chart(score, title="AIRI Composite Score"):
+    band = classify_readiness_band(score)
+    bands = get_readiness_bands()
+    band_info = bands[band]
     fig = go.Figure(go.Indicator(
-        mode="gauge+number", value=score,
-        number={'suffix':"/100", 'font':{'size':42, 'color':BLACK}},
-        title={'text':"AIRI Composite Score", 'font':{'size':15, 'color':BLACK}},
-        gauge={'axis':{'range':[0,100], 'tickfont':{'color':BLACK, 'size':10}},
-               'bar':{'color':GREEN, 'thickness':0.65},
-               'bgcolor':WHITE, 'borderwidth':1, 'bordercolor':GREY,
-               'steps':[{'range':[0,25],'color':'#ffeeee'},{'range':[25,50],'color':'#fff8e0'},
-                        {'range':[50,75],'color':'#eeffee'},{'range':[75,100],'color':'#eeeeff'}],
-               'threshold':{'line':{'color':BLACK,'width':3},'thickness':0.8,'value':score}}))
-    fig.update_layout(height=340, paper_bgcolor=WHITE, margin=dict(t=60,b=20))
+        mode="gauge+number+delta", value=score,
+        number={'suffix':"/100",'font':{'size':48,'color':band_info['dark_color']}},
+        title={'text':title,'font':{'size':20,'color':'#1e3a5f'}},
+        delta={'reference':50,'position':"bottom"},
+        gauge={
+            'axis':{'range':[0,100],'tickwidth':2,'tickcolor':'#2d3748'},
+            'bar':{'color':band_info['dark_color'],'thickness':0.75},
+            'bgcolor':'white','borderwidth':2,'bordercolor':'#e2e8f0',
+            'steps':[{'range':[0,25],'color':'#fed7d7'},{'range':[25,50],'color':'#feebc8'},
+                     {'range':[50,75],'color':'#c6f6d5'},{'range':[75,100],'color':'#bee3f8'}],
+            'threshold':{'line':{'color':'black','width':4},'thickness':0.8,'value':score}}))
+    fig.update_layout(height=400, paper_bgcolor='white', margin=dict(t=80,b=20))
     return fig
 
-def ch_impact(ds):
-    dims = list(ds.keys()); scores = list(ds.values())
-    mean = float(np.mean(scores))
-    devs = [s - mean for s in scores]
-    colors = ['#cc0000' if d < 0 else GREEN for d in devs]
-    fig = go.Figure(go.Bar(y=dims, x=devs, orientation='h',
-        marker=dict(color=colors, line=dict(color='white', width=0.5)),
-        text=[f'{d:+.1f}' for d in devs], textposition='outside',
-        textfont=dict(size=11, color=BLACK)))
-    fig.add_vline(x=0, line_color=BLACK, line_width=1.5)
+
+def create_readiness_distribution_chart(all_scores):
+    fig = go.Figure()
+    fig.add_trace(go.Histogram(
+        x=all_scores, nbinsx=20,
+        marker=dict(color='#2c5282', line=dict(color='white',width=1)),
+        opacity=0.8, name='Organisations'))
+    for val, label, color in [(25,'Nascent/Developing','#c53030'),
+                               (50,'Developing/Established','#c05621'),
+                               (75,'Established/Advanced','#276749')]:
+        fig.add_vline(x=val, line_dash="dash", line_color=color, line_width=2,
+                      annotation_text=label, annotation_position="top")
     fig.update_layout(
-        title=dict(text="Dimension Impact — Deviation from Mean",
-                   font=dict(size=15, color=BLACK), x=0.5),
-        xaxis=dict(title=dict(text="Impact", font=dict(color=BLACK)),
-                   tickfont=dict(color=BLACK),
-                   zeroline=True, zerolinecolor=BLACK, zerolinewidth=1.5,
-                   gridcolor='#eeeeee'),
-        yaxis=dict(tickfont=dict(color=BLACK, size=11)),
-        plot_bgcolor=WHITE, paper_bgcolor=WHITE,
-        height=300, margin=dict(l=170, r=80, t=50, b=40),
-        showlegend=False)
+        title=dict(text="Distribution of AIRI Composite Scores",font=dict(size=18,color='#1e3a5f'),x=0.5),
+        xaxis=dict(title=dict(text="AIRI Composite Score"),range=[0,100],tickfont=dict(size=12)),
+        yaxis=dict(title=dict(text="Number of Organisations"),tickfont=dict(size=12)),
+        plot_bgcolor='white', paper_bgcolor='white', height=400, bargap=0.1)
     return fig
 
-def ch_pca(df):
+
+def create_shap_style_importance(dimension_scores):
+    dimensions = list(dimension_scores.keys())
+    scores = list(dimension_scores.values())
+    mean_score = np.mean(scores)
+    shap_values = [s - mean_score for s in scores]
+    colors = ['#e53e3e' if v < 0 else '#38a169' for v in shap_values]
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        y=dimensions, x=shap_values, orientation='h',
+        marker=dict(color=colors, line=dict(color='white',width=1)),
+        text=[f'{v:+.1f}' for v in shap_values], textposition='outside',
+        textfont=dict(size=12)))
+    fig.add_vline(x=0, line_color='black', line_width=1)
+    fig.update_layout(
+        title=dict(text="Dimension Impact on Readiness (Deviation from Mean)",font=dict(size=18,color='#1e3a5f'),x=0.5),
+        xaxis=dict(title=dict(text="Impact on Composite Score"),tickfont=dict(size=12),
+                   zeroline=True,zerolinecolor='black',zerolinewidth=2),
+        yaxis=dict(tickfont=dict(size=13)),
+        plot_bgcolor='white', paper_bgcolor='white',
+        height=350, margin=dict(l=150), showlegend=False)
+    return fig
+
+
+def create_pca_scatter(all_responses_df):
     try:
-        if len(df) < 3:
+        if len(all_responses_df) < 3:
             fig = go.Figure()
-            fig.add_annotation(text="Need at least 3 assessments for PCA",
-                               showarrow=False, font=dict(size=13, color=BLACK))
-            fig.update_layout(height=360, paper_bgcolor=WHITE,
-                              xaxis=dict(visible=False), yaxis=dict(visible=False))
+            fig.add_annotation(
+                text="Insufficient data for PCA visualization (need 3+ responses)",
+                showarrow=False, font=dict(size=16,color='#718096'))
+            fig.update_layout(height=400, paper_bgcolor='white')
             return fig
-        dim_cols = [c for c in df.columns if c not in ['AIRI_composite','AIRI_band']]
-        if len(dim_cols) < 2:
+        dim_cols = ['Strategy_Governance','Data_Technology','People_Skills','Risk_Ethics']
+        available = [c for c in dim_cols if c in all_responses_df.columns]
+        if len(available) < 2:
             fig = go.Figure()
-            fig.add_annotation(text="Insufficient dimension columns for PCA",
-                               showarrow=False, font=dict(size=13, color=BLACK))
-            fig.update_layout(height=360, paper_bgcolor=WHITE,
-                              xaxis=dict(visible=False), yaxis=dict(visible=False))
+            fig.add_annotation(text="Insufficient dimension data for PCA",
+                               showarrow=False, font=dict(size=16,color='#718096'))
+            fig.update_layout(height=400, paper_bgcolor='white')
             return fig
-        X   = df[dim_cols].fillna(0).values
-        X_s = MinMaxScaler().fit_transform(X)
-        pca = PCA(n_components=min(2, X_s.shape[1]))
-        X_p = pca.fit_transform(X_s)
-        n_c = min(4, len(df))
-        clusters = KMeans(n_clusters=n_c, random_state=42, n_init='auto').fit_predict(X_s)
-        pdf = pd.DataFrame({
-            'PC1':    X_p[:,0],
-            'PC2':    X_p[:,1] if X_p.shape[1] > 1 else np.zeros(len(X_p)),
-            'Band':   df['AIRI_band'].values,
-            'Score':  df['AIRI_composite'].values,
-            'Cluster':clusters.astype(str)})
-        cmap = {'Nascent':'#cc0000','Developing':'#cc7700',
-                'Established':GREEN,'Advanced':'#0000aa'}
-        fig = px.scatter(pdf, x='PC1', y='PC2', color='Band',
-                         size='Score', hover_data=['Score'],
-                         color_discrete_map=cmap)
+        X = all_responses_df[available].fillna(0).values
+        scaler = MinMaxScaler()
+        X_scaled = scaler.fit_transform(X)
+        pca = PCA(n_components=min(2,X_scaled.shape[1]))
+        X_pca = pca.fit_transform(X_scaled)
+        n_clusters = min(4, len(all_responses_df))
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+        clusters = kmeans.fit_predict(X_scaled)
+        plot_df = pd.DataFrame({
+            'PC1': X_pca[:,0],
+            'PC2': X_pca[:,1] if X_pca.shape[1] > 1 else np.zeros(len(X_pca)),
+            'Cluster': clusters,
+            'Band': all_responses_df['AIRI_band'].values,
+            'Score': all_responses_df['AIRI_composite'].values
+        })
         var1 = pca.explained_variance_ratio_[0]
         var2 = pca.explained_variance_ratio_[1] if len(pca.explained_variance_ratio_) > 1 else 0
+        fig = px.scatter(
+            plot_df, x='PC1', y='PC2', color='Band', symbol='Cluster', size='Score',
+            hover_data=['Score'],
+            color_discrete_map={'Nascent':'#fc8181','Developing':'#fbd38d',
+                                'Established':'#9ae6b4','Advanced':'#90cdf4'})
         fig.update_layout(
-            title=dict(text=f"PCA Clustering  (PC1={var1:.0%}, PC2={var2:.0%} variance)",
-                       font=dict(size=13, color=BLACK), x=0.5),
-            plot_bgcolor=WHITE, paper_bgcolor=WHITE, height=400,
-            xaxis=dict(tickfont=dict(color=BLACK), gridcolor='#eeeeee'),
-            yaxis=dict(tickfont=dict(color=BLACK), gridcolor='#eeeeee'),
-            legend=dict(font=dict(color=BLACK)))
+            title=dict(text=f"PCA: Readiness Structure & Clustering",
+                       font=dict(size=18,color='#1e3a5f'), x=0.5),
+            xaxis=dict(title=dict(text=f"PC1 ({var1:.1%} variance)"),tickfont=dict(size=12)),
+            yaxis=dict(title=dict(text=f"PC2 ({var2:.1%} variance)"),tickfont=dict(size=12)),
+            plot_bgcolor='white', paper_bgcolor='white', height=500)
         return fig
     except Exception:
         fig = go.Figure()
         fig.add_annotation(
             text="PCA chart unavailable — complete more assessments to enable clustering",
-            showarrow=False, font=dict(size=13, color=BLACK))
-        fig.update_layout(height=360, paper_bgcolor=WHITE,
+            showarrow=False, font=dict(size=14,color='#718096'))
+        fig.update_layout(height=400, paper_bgcolor='white',
                           xaxis=dict(visible=False), yaxis=dict(visible=False))
         return fig
 
-# ── SESSION STATE ──────────────────────────────────────────────────────────────
-def init():
-    for k, v in {'responses':{},'dim_scores':{},'composite':0,
-                 'done':False,'page':'home'}.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
 
-def save(responses, dim_scores, comp):
-    st.session_state.responses  = responses
-    st.session_state.dim_scores = dim_scores
-    st.session_state.composite  = comp
-    st.session_state.done       = True
-    band = classify(comp)
-    ts   = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+def init_session_state():
+    if 'responses' not in st.session_state:
+        st.session_state.responses = {}
+    if 'dimension_scores' not in st.session_state:
+        st.session_state.dimension_scores = {}
+    if 'composite_score' not in st.session_state:
+        st.session_state.composite_score = 0
+    if 'assessment_complete' not in st.session_state:
+        st.session_state.assessment_complete = False
+    if 'all_responses' not in st.session_state:
+        st.session_state.all_responses = []
+    if 'page' not in st.session_state:
+        st.session_state.page = 'home'
+
+
+def save_response_to_session(responses, dimension_scores, composite_score):
+    band = classify_readiness_band(composite_score)
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    st.session_state.responses = responses
+    st.session_state.dimension_scores = dimension_scores
+    st.session_state.composite_score = composite_score
+    st.session_state.assessment_complete = True
     try:
-        with open('airi_responses.txt','a',encoding='utf-8') as f:
-            f.write("=== AIRI Assessment | " + ts + " ===\n")
-            f.write("Composite Score: " + str(round(comp,2)) + " | Band: " + band + "\n")
-            for d, s in dim_scores.items():
-                f.write("  " + d + ": " + str(round(s,2)) + "\n")
+        with open('airi_responses.txt', 'a', encoding='utf-8') as f:
+            f.write("=== AIRI Assessment | " + timestamp + " ===\n")
+            f.write("Composite Score: " + str(round(composite_score,2)) + " | Band: " + band + "\n")
+            for dim, score in dimension_scores.items():
+                f.write("  " + dim + ": " + str(round(score,2)) + "\n")
             f.write("Raw Responses: " + json.dumps(responses) + "\n")
             f.write("-"*50 + "\n\n")
-    except Exception:
-        pass
+    except Exception as e:
+        st.error("Failed to save: " + str(e))
 
-# ── PAGE: HOME ─────────────────────────────────────────────────────────────────
-def pg_home():
+
+def clear_assessment():
+    st.session_state.responses = {}
+    st.session_state.dimension_scores = {}
+    st.session_state.composite_score = 0
+    st.session_state.assessment_complete = False
+
+
+def render_home():
     st.markdown("""
-    <div style="background:#007700;padding:28px 24px;border-radius:6px;margin-bottom:20px;">
-      <h1 style="color:#ffffff;margin:0;font-size:2rem;">🤖  AIRI — AI Readiness Index</h1>
-      <p style="color:#ddffdd;margin:6px 0 0 0;font-size:1rem;">
-        UK Debt Management Institutions &nbsp;|&nbsp;
-        FCA Consumer Duty Aligned &nbsp;|&nbsp;
-        Bournemouth University COMP7024 2025/26
-      </p>
+    <div style="text-align:center;padding:40px 20px;background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);border-radius:15px;margin-bottom:30px;">
+        <h1 style="color:white;font-size:3em;margin-bottom:10px;">🤖 AIRI</h1>
+        <h2 style="color:#bee3f8;font-size:1.5em;font-weight:400;border:none;">AI Readiness Index for UK Debt Management</h2>
+        <p style="color:#e2e8f0;font-size:1.1em;max-width:700px;margin:20px auto;">
+            A quantitative diagnostic tool to assess institutional preparedness for ethical AI agent deployment
+            in UK debt management institutions, aligned with FCA Consumer Duty requirements.
+        </p>
     </div>""", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
-    for col, icon, title, desc in zip(
-        [col1, col2, col3],
-        ["🔍","📊","💡"],
-        ["Self-Assessment","Interactive Dashboard","Actionable Insights"],
-        ["Complete a structured survey across 5 dimensions and 31 indicators to evaluate your organisation's AI readiness.",
-         "Visualise your readiness profile with radar charts, gauges, and comparative analytics.",
-         "Receive recommendations based on your readiness band and dimension-specific gap analysis."]):
-        with col:
-            st.markdown(f"""
-            <div style="background:#f4f4f4;padding:18px;border-radius:6px;
-                        border-top:3px solid #007700;height:100%;">
-                <div style="font-size:1.8rem;margin-bottom:8px;">{icon}</div>
-                <p style="font-weight:700;color:#111111;margin:0 0 6px 0;">{title}</p>
-                <p style="color:#333333;font-size:0.88rem;margin:0;">{desc}</p>
-            </div>""", unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    _, c2, _ = st.columns([1,2,1])
-    with c2:
-        if st.button("🚀  Start AIRI Assessment", use_container_width=True):
-            st.session_state.page = 'survey'; st.rerun()
-
-    st.markdown("---")
-    st.markdown("## AIRI Framework Overview")
-
-    cdims = get_conceptual_dims()
-    bands = get_bands()
-    col1, col2 = st.columns(2)
     with col1:
-        st.markdown("### Conceptual Dimensions")
-        for name, info in cdims.items():
-            with st.expander(f"{info['code']}: {name}"):
-                st.write(info['desc'])
-                for ind in info['inds']:
-                    st.write(f"• {ind}")
+        st.markdown("""
+        <div style="background:white;padding:25px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.08);height:100%;">
+            <div style="font-size:2.5em;text-align:center;margin-bottom:15px;">🔍</div>
+            <h3 style="text-align:center;color:#2c5282;">Self-Assessment</h3>
+            <p style="color:#4a5568;text-align:center;">Complete a structured survey across 5 dimensions and 31 indicators to evaluate your organisation's AI readiness.</p>
+        </div>""", unsafe_allow_html=True)
     with col2:
-        st.markdown("### Readiness Bands")
-        for name, info in bands.items():
-            with st.expander(f"{name}  ({info['min']}–{info['max']})"):
-                st.markdown(f"""
-                <div style="background:{info['bg']};border-left:4px solid {info['border']};
-                            padding:10px;border-radius:4px;margin-bottom:8px;">
-                    <p style="color:{info['text']};font-weight:600;margin:0;">{info['desc']}</p>
-                </div>""", unsafe_allow_html=True)
-                for rec in info['recs'][:3]:
-                    st.write(f"• {rec}")
-
-# ── PAGE: SURVEY ───────────────────────────────────────────────────────────────
-def pg_survey():
-    st.markdown("# AIRI Expert Assessment Survey")
-    st.markdown("""Rate your organisation's current capability for each indicator on a scale of **0 to 8**.
-**0** = Not implemented &nbsp;|&nbsp; **4** = Partially implemented &nbsp;|&nbsp; **8** = Fully optimised""")
-    st.markdown("---")
-
-    questions = get_questions()
-    responses = {}
-
-    st.markdown("### Respondent Information")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        role = st.selectbox("Your Role",
-            ["Select...","C-Suite Executive","IT Director","Data Scientist",
-             "Risk Manager","Compliance Officer","Operations Manager","Legal / Regulatory","Other"])
-    with c2:
-        experience = st.selectbox("Years in Role",
-            ["Select...","< 1 year","1–3 years","3–5 years","5–10 years","> 10 years"])
-    with c3:
-        org_size = st.selectbox("Organisation Size",
-            ["Select...","Small (< 50)","Medium (50–250)","Large (250–1000)","Enterprise (> 1000)"])
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    for dim_name, qs in questions.items():
-        st.markdown(f"""
-        <div style="background:#f4f4f4;border-left:4px solid #007700;
-                    padding:10px 14px;border-radius:4px;margin:14px 0 6px 0;">
-            <p style="color:#111111;font-weight:700;font-size:1rem;margin:0;">{dim_name}</p>
-            <p style="color:#444444;font-size:0.83rem;margin:3px 0 0 0;">
-                Rate each indicator from 0 (no capability) to 8 (fully optimised)
-            </p>
+        st.markdown("""
+        <div style="background:white;padding:25px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.08);height:100%;">
+            <div style="font-size:2.5em;text-align:center;margin-bottom:15px;">📊</div>
+            <h3 style="text-align:center;color:#2c5282;">Interactive Dashboard</h3>
+            <p style="color:#4a5568;text-align:center;">Visualize your readiness profile with radar charts, gauges, and comparative analytics against industry benchmarks.</p>
+        </div>""", unsafe_allow_html=True)
+    with col3:
+        st.markdown("""
+        <div style="background:white;padding:25px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.08);height:100%;">
+            <div style="font-size:2.5em;text-align:center;margin-bottom:15px;">💡</div>
+            <h3 style="text-align:center;color:#2c5282;">Actionable Insights</h3>
+            <p style="color:#4a5568;text-align:center;">Receive personalized recommendations based on your readiness band and dimension-specific gap analysis.</p>
         </div>""", unsafe_allow_html=True)
 
-        for q in qs:
-            c1, c2 = st.columns([3,1])
-            with c1:
+    st.markdown("<br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        if st.button("Start AIRI Assessment", use_container_width=True):
+            st.session_state.page = 'survey'; st.rerun()
+
+    st.markdown("<br><hr><br>", unsafe_allow_html=True)
+    st.markdown("""
+    <h2 style="text-align:center;color:#1e3a5f;">AIRI Framework Overview</h2>
+    <p style="text-align:center;color:#4a5568;max-width:800px;margin:0 auto;">
+        The AI Readiness Index evaluates organisational preparedness across five interconnected dimensions,
+        producing a standardized 0-100 score with four readiness bands.
+    </p>""", unsafe_allow_html=True)
+
+    conceptual_dims, _ = get_airi_dimensions()
+    bands = get_readiness_bands()
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Conceptual Dimensions")
+        for name, info in conceptual_dims.items():
+            with st.expander(f"{info['code']}: {name}"):
+                st.write(info['description'])
+                st.write("**Key Indicators:**")
+                for ind in info['indicators']:
+                    st.write(f"• {ind}")
+    with col2:
+        st.subheader("Readiness Bands")
+        for name, info in bands.items():
+            with st.expander(f"{name} ({info['min']}-{info['max']})"):
                 st.markdown(f"""
-                <div style="padding:9px 12px;background:#ffffff;border:1px solid #dddddd;
-                            border-radius:4px;margin:3px 0;">
-                    <p style="color:#007700;font-weight:700;font-size:0.85rem;margin:0 0 2px 0;">
-                        {q['id']} — {q['sub']}
-                    </p>
-                    <p style="color:#111111;font-size:0.87rem;margin:0;">{q['text']}</p>
+                <div style="background-color:{info['color']};padding:10px;border-radius:8px;">
+                    <p style="color:{info['dark_color']};font-weight:bold;margin:0;">{info['description']}</p>
                 </div>""", unsafe_allow_html=True)
-            with c2:
-                responses[q['id']] = st.slider(
-                    "Score", 0, 8, 0,
-                    key=f"s_{q['id']}",
+                st.write("**Key Recommendations:**")
+                for rec in info['recommendations'][:3]:
+                    st.write(f"• {rec}")
+
+
+def render_survey():
+    st.markdown("""
+    <h1 style="color:#1e3a5f;">AIRI Expert Assessment Survey</h1>
+    <p style="color:#4a5568;font-size:1.1em;">
+        Please rate your organisation's current capability for each indicator on a scale of 0-8,
+        where <strong>0 = Not implemented/No capability</strong> and <strong>8 = Fully optimized/Industry leading</strong>.
+    </p>
+    <hr>""", unsafe_allow_html=True)
+
+    questions = generate_survey_questions()
+    responses = {}
+
+    st.subheader("👤 Respondent Information")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        role = st.selectbox("Your Role",
+            ["Select...","C-Suite Executive","IT/Director","Data Scientist",
+             "Risk Manager","Compliance Officer","Operations Manager","Legal/Regulatory","Other"])
+    with col2:
+        experience = st.selectbox("Years in Role",
+            ["Select...","< 1 year","1-3 years","3-5 years","5-10 years","> 10 years"])
+    with col3:
+        org_size = st.selectbox("Organisation Size",
+            ["Select...","Small (< 50 staff)","Medium (50-250)","Large (250-1000)","Enterprise (> 1000)"])
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    for dim_name, dim_questions in questions.items():
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#ebf8ff 0%,#bee3f8 100%);padding:15px;border-radius:10px;margin:20px 0;">
+            <h3 style="color:#2c5282;margin:0;">{dim_name.replace('_',' ')}</h3>
+            <p style="color:#4a5568;margin:5px 0 0 0;font-size:0.9em;">Rate each indicator from 0 (no capability) to 8 (fully optimized)</p>
+        </div>""", unsafe_allow_html=True)
+
+        for q in dim_questions:
+            col1, col2 = st.columns([3,1])
+            with col1:
+                st.markdown(f"""
+                <div style="padding:10px;background:white;border-radius:8px;margin:5px 0;border:1px solid #e2e8f0;">
+                    <p style="color:#2d3748;font-weight:600;margin:0 0 2px 0;"><strong>{q['id']}</strong>: {q['text']}</p>
+                    <span style="color:#718096;font-size:0.85em;">{q['sub_dimension']}</span>
+                </div>""", unsafe_allow_html=True)
+            with col2:
+                responses[q['id']] = st.slider("Score", min_value=0, max_value=8, value=0,
+                    key=f"survey_{q['id']}", help="0=Not implemented, 8=Fully optimized",
                     label_visibility="collapsed")
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<hr style='margin:30px 0;'>", unsafe_allow_html=True)
 
-    _, c2, _ = st.columns([1,2,1])
-    with c2:
-        if st.button("📊  Calculate My AIRI Score", use_container_width=True, type="primary"):
-            if "Select..." in [role, experience, org_size]:
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        if st.button("Calculate AIRI Score", use_container_width=True, type="primary"):
+            if role == "Select..." or experience == "Select..." or org_size == "Select...":
                 st.error("Please complete all respondent information fields.")
             else:
-                ds   = {d: dim_score(responses, qs) for d, qs in questions.items()}
-                comp = composite(ds)
-                save(responses, ds, comp)
-                st.session_state.page = 'results'
-                st.rerun()
+                dimension_scores = {}
+                for dim_name, dim_questions in questions.items():
+                    dim_score = compute_dimension_score(responses, dim_questions)
+                    dimension_scores[dim_name] = dim_score
+                composite = compute_composite_airi(dimension_scores)
+                save_response_to_session(responses, dimension_scores, composite)
+                st.session_state.page = 'results'; st.rerun()
 
     if st.button("← Back to Home"):
         st.session_state.page = 'home'; st.rerun()
 
-# ── PAGE: RESULTS ──────────────────────────────────────────────────────────────
-def pg_results():
-    if not st.session_state.get('done', False):
+
+def render_results():
+    if not st.session_state.get('assessment_complete', False) or not st.session_state.dimension_scores:
         st.warning("No assessment data found. Please complete the survey first.")
-        if st.button("Go to Survey"):
+        if st.button("Go to Survey", use_container_width=True):
             st.session_state.page = 'survey'; st.rerun()
         return
 
-    ds   = st.session_state.dim_scores
-    comp = st.session_state.composite
-    band = classify(comp)
-    bi   = get_bands()[band]
-    best = max(ds, key=ds.get)
-    worst= min(ds, key=ds.get)
+    dimension_scores = st.session_state.dimension_scores
+    composite_score  = st.session_state.composite_score
+    band      = classify_readiness_band(composite_score)
+    bands     = get_readiness_bands()
+    band_info = bands[band]
 
     st.markdown(f"""
-    <div style="background:#007700;padding:22px;border-radius:6px;margin-bottom:18px;">
-        <h1 style="color:#ffffff;margin:0;">Your AIRI Assessment Results</h1>
-        <p style="color:#ddffdd;margin:5px 0 0 0;">
-            Completed on {datetime.now().strftime('%d %B %Y')}
+    <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);padding:30px;border-radius:15px;margin-bottom:30px;">
+        <h1 style="color:white;margin:0;">Your AIRI Assessment Results</h1>
+        <p style="color:#bee3f8;font-size:1.1em;margin:10px 0 0 0;">
+            Assessment completed on {datetime.now().strftime('%B %d, %Y')}
         </p>
     </div>""", unsafe_allow_html=True)
 
-    c1, c2, c3, c4 = st.columns(4)
-    def kpi(col, bg, border, tc, label, value, sub):
-        col.markdown(f"""
-        <div style="background:{bg};border:2px solid {border};padding:14px;
-                    border-radius:6px;text-align:center;">
-            <p style="color:{tc};font-size:0.75rem;text-transform:uppercase;
-               letter-spacing:1px;margin:0;">{label}</p>
-            <p style="color:{tc};font-size:2.2rem;font-weight:700;margin:4px 0;">{value}</p>
-            <p style="color:{tc};font-size:0.78rem;margin:0;">{sub}</p>
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Composite Score</div>
+            <div class="metric-value">{composite_score:.1f}</div>
+            <div style="font-size:0.9em;opacity:0.8;color:white;">out of 100</div>
+        </div>""", unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+        <div class="metric-card" style="background:linear-gradient(135deg,{band_info['dark_color']} 0%,{band_info['color']} 100%);">
+            <div class="metric-label">Readiness Band</div>
+            <div class="metric-value">{band}</div>
+            <div style="font-size:0.9em;opacity:0.8;color:white;">{band_info['min']}-{band_info['max']} range</div>
+        </div>""", unsafe_allow_html=True)
+    with col3:
+        strongest_dim = max(dimension_scores, key=dimension_scores.get)
+        st.markdown(f"""
+        <div class="metric-card" style="background:linear-gradient(135deg,#38a169 0%,#48bb78 100%);">
+            <div class="metric-label">Strongest Dimension</div>
+            <div class="metric-value" style="font-size:1.5em;">{strongest_dim.replace('_',' ')}</div>
+            <div style="font-size:0.9em;opacity:0.8;color:white;">{dimension_scores[strongest_dim]:.1f}/100</div>
+        </div>""", unsafe_allow_html=True)
+    with col4:
+        weakest_dim = min(dimension_scores, key=dimension_scores.get)
+        st.markdown(f"""
+        <div class="metric-card" style="background:linear-gradient(135deg,#e53e3e 0%,#fc8181 100%);">
+            <div class="metric-label">Weakest Dimension</div>
+            <div class="metric-value" style="font-size:1.5em;">{weakest_dim.replace('_',' ')}</div>
+            <div style="font-size:0.9em;opacity:0.8;color:white;">{dimension_scores[weakest_dim]:.1f}/100</div>
         </div>""", unsafe_allow_html=True)
 
-    kpi(c1, "#007700", "#007700", WHITE,  "Composite Score", f"{comp:.1f}", "out of 100")
-    kpi(c2, bi['bg'],  bi['border'], bi['text'], "Readiness Band",  band, f"{bi['min']}–{bi['max']}")
-    kpi(c3, "#eeffee", "#007700",  "#005500", "Strongest", best, f"{ds[best]:.1f}/100")
-    kpi(c4, "#ffeeee", "#cc0000",  "#cc0000", "Weakest",  worst, f"{ds[worst]:.1f}/100")
+    st.markdown("<br>", unsafe_allow_html=True)
+    col1, col2 = st.columns([1,1])
+    with col1:
+        st.plotly_chart(create_gauge_chart(composite_score), use_container_width=True)
+    with col2:
+        st.plotly_chart(create_radar_chart(dimension_scores), use_container_width=True)
+
+    st.subheader("Dimension Score Breakdown")
+    st.plotly_chart(create_dimension_bar_chart(dimension_scores), use_container_width=True)
+
+    st.subheader("Dimension Impact Analysis (Deviation from Mean)")
+    st.plotly_chart(create_shap_style_importance(dimension_scores), use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1: st.plotly_chart(ch_gauge(comp),   use_container_width=True)
-    with c2: st.plotly_chart(ch_radar(ds),      use_container_width=True)
-
-    st.markdown("## Dimension Score Breakdown")
-    st.plotly_chart(ch_bar(ds), use_container_width=True)
-
-    st.markdown("## Dimension Impact Analysis")
-    st.plotly_chart(ch_impact(ds), use_container_width=True)
-
     st.markdown(f"""
-    <div style="background:{bi['bg']};border-left:5px solid {bi['border']};
-                padding:18px;border-radius:5px;margin:14px 0;">
-        <h3 style="color:{bi['text']};margin:0 0 6px 0;">
-            Recommendations for {band} Organisations
-        </h3>
-        <p style="color:#222222;margin:0;">{bi['desc']}</p>
+    <div style="background:linear-gradient(135deg,{band_info['color']} 0%,white 100%);padding:25px;border-radius:12px;border-left:5px solid {band_info['dark_color']};">
+        <h3 style="color:{band_info['dark_color']};margin-top:0;">Recommendations for {band} Organisations</h3>
+        <p style="color:#4a5568;font-size:1.05em;">{band_info['description']}</p>
     </div>""", unsafe_allow_html=True)
 
     st.write("**Priority Actions:**")
-    for i, rec in enumerate(bi['recs'], 1):
+    for i, rec in enumerate(band_info['recommendations'], 1):
         st.write(f"{i}. {rec}")
 
-    st.markdown("## Gap Analysis")
-    gap_df = pd.DataFrame([{
-        'Dimension':     d,
-        'Current Score': f"{s:.1f}",
-        'Gap':           f"{100-s:.1f}",
-        'Priority':      'High' if (100-s)>60 else 'Medium' if (100-s)>40 else 'Low'
-    } for d, s in ds.items()])
-    st.dataframe(gap_df, use_container_width=True, hide_index=True)
-
     st.markdown("<br>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3)
-    with c1:
+    st.subheader("Gap Analysis")
+    gap_data = []
+    for dim, score in dimension_scores.items():
+        gap = 100 - score
+        gap_data.append({'Dimension':dim.replace('_',' '),'Current Score':round(score,1),
+                         'Gap':round(gap,1),'Priority':'High' if gap>60 else 'Medium' if gap>40 else 'Low'})
+    st.dataframe(pd.DataFrame(gap_data), use_container_width=True, hide_index=True)
+
+    st.markdown("<br><hr>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
+    with col1:
         if st.button("← Retake Assessment", use_container_width=True):
             st.session_state.page = 'survey'; st.rerun()
-    with c2:
-        if st.button("📈  Analytics Dashboard", use_container_width=True):
+    with col2:
+        if st.button("View Aggregate Dashboard", use_container_width=True):
             st.session_state.page = 'dashboard'; st.rerun()
-    with c3:
-        csv_data = pd.DataFrame(
-            [{'Dimension':k, 'Score':v} for k,v in ds.items()] +
-            [{'Dimension':'AIRI Composite', 'Score':comp}]
-        ).to_csv(index=False)
-        st.download_button("📥  Export CSV", csv_data,
-                           "airi_results.csv", "text/csv",
-                           use_container_width=True)
+    with col3:
+        results_df = pd.DataFrame(
+            [{'Dimension':k.replace('_',' '),'Score':v} for k,v in dimension_scores.items()] +
+            [{'Dimension':'AIRI Composite','Score':composite_score}])
+        st.download_button("📥 Export Results (CSV)", results_df.to_csv(index=False),
+                           "airi_results.csv","text/csv", use_container_width=True)
 
-# ── PAGE: DASHBOARD ────────────────────────────────────────────────────────────
-def pg_dashboard():
-    st.markdown(f"""
-    <div style="background:#007700;padding:22px;border-radius:6px;margin-bottom:18px;">
-        <h1 style="color:#ffffff;margin:0;">AIRI Aggregate Analytics Dashboard</h1>
-        <p style="color:#ddffdd;margin:5px 0 0 0;">Comparative analysis across all assessed organisations</p>
+    st.markdown("<br>", unsafe_allow_html=True)
+    with st.expander("🗑️ Clear Assessment Data", expanded=False):
+        st.warning("This will permanently delete your assessment record from this session.")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Yes, Clear My Data", use_container_width=True, type="primary"):
+                clear_assessment()
+                st.success("Assessment data cleared successfully!")
+                st.session_state.page = 'home'; st.rerun()
+        with col2:
+            if st.button("Cancel", use_container_width=True):
+                st.rerun()
+
+
+def render_dashboard():
+    st.markdown("""
+    <div style="background:linear-gradient(135deg,#2c5282 0%,#1e3a5f 100%);padding:30px;border-radius:15px;margin-bottom:30px;">
+        <h1 style="color:white;margin:0;">AIRI Aggregate Analytics Dashboard</h1>
+        <p style="color:#bee3f8;font-size:1.1em;margin:10px 0 0 0;">Comparative analysis across all assessed organisations</p>
     </div>""", unsafe_allow_html=True)
 
-    all_recs = []
+    all_responses = []
     try:
         if os.path.exists('airi_responses.txt'):
             with open('airi_responses.txt','r',encoding='utf-8') as f:
-                recs = f.read().split('=== AIRI Assessment | ')
-                for rec in recs[1:]:
+                records = f.read().split('=== AIRI Assessment | ')
+                for rec in records[1:]:
                     lines = rec.strip().split('\n')
-                    comp  = float(lines[1].split('|')[0].split(':')[1].strip())
-                    band  = lines[1].split('|')[1].split(':')[1].strip()
-                    ds    = {}
-                    for ln in lines[2:]:
-                        if ln.startswith('  ') and ':' in ln and 'Raw' not in ln:
-                            parts = ln.strip().split(':')
-                            try: ds[parts[0].strip()] = float(parts[1].strip())
+                    composite = float(lines[1].split('|')[0].split(':')[1].strip())
+                    band = lines[1].split('|')[1].split(':')[1].strip()
+                    dim_scores = {}
+                    for line in lines[2:]:
+                        if line.startswith('  ') and ':' in line and not line.startswith('  Raw'):
+                            parts = line.strip().split(':')
+                            try: dim_scores[parts[0].strip()] = float(parts[1].strip())
                             except: pass
-                    all_recs.append({**ds, 'AIRI_composite':comp, 'AIRI_band':band})
-    except Exception:
-        pass
+                    all_responses.append({'respondent_id':"FILE_"+str(len(all_responses)+1).zfill(3),
+                        **dim_scores,'AIRI_composite':composite,'AIRI_band':band})
+    except Exception as e:
+        st.error("Error reading backend file: " + str(e))
 
-    if not all_recs:
-        st.info("No assessment data yet. Complete a survey to populate this dashboard.")
+    if len(all_responses) == 0:
+        st.warning("No assessment data available yet. Complete a survey to see analytics.")
         if st.button("← Go to Survey"):
             st.session_state.page = 'survey'; st.rerun()
         return
 
-    df = pd.DataFrame(all_recs)
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Assessments",  len(df))
-    c2.metric("Mean AIRI Score",    f"{df['AIRI_composite'].mean():.1f}")
-    c3.metric("Median AIRI Score",  f"{df['AIRI_composite'].median():.1f}")
-    c4.metric("Most Common Band",   df['AIRI_band'].mode()[0] if not df.empty else "N/A")
+    df = pd.DataFrame(all_responses)
 
-    dim_cols = [c for c in df.columns if c not in ['AIRI_composite','AIRI_band']]
-    if dim_cols:
-        avg = df[dim_cols].mean().to_dict()
-        st.markdown("## Average Dimension Profile")
-        st.plotly_chart(ch_radar(avg, "Average Dimension Profile (All Assessments)"),
-                        use_container_width=True)
-        st.markdown("## PCA Clustering")
-        st.plotly_chart(ch_pca(df), use_container_width=True)
+    st.subheader("Cohort Overview")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1: st.metric("Total Assessments", len(df))
+    with col2: st.metric("Mean AIRI Score", f"{df['AIRI_composite'].mean():.1f}")
+    with col3: st.metric("Median AIRI Score", f"{df['AIRI_composite'].median():.1f}")
+    with col4: st.metric("Most Common Band", df['AIRI_band'].mode()[0] if not df['AIRI_band'].empty else "N/A")
 
-    c1, c2 = st.columns(2)
-    with c1:
+    st.plotly_chart(create_readiness_distribution_chart(df['AIRI_composite'].tolist()), use_container_width=True)
+
+    st.subheader("Readiness Band Distribution")
+    band_counts = df['AIRI_band'].value_counts().reset_index()
+    band_counts.columns = ['Band','Count']
+    fig = px.pie(band_counts, values='Count', names='Band', color='Band', hole=0.4,
+        color_discrete_map={'Nascent':'#fc8181','Developing':'#fbd38d',
+                            'Established':'#9ae6b4','Advanced':'#90cdf4'})
+    fig.update_layout(title=dict(text="Distribution by Readiness Band",x=0.5), height=450)
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Dimension Comparison (Cohort Average)")
+    dim_cols = ['Strategy_Governance','Data_Technology','People_Skills','Risk_Ethics']
+    available = [c for c in dim_cols if c in df.columns]
+    if available:
+        avg_dims = df[available].mean().to_dict()
+        st.plotly_chart(create_radar_chart(avg_dims, title="Average Dimension Profile (Cohort)"), use_container_width=True)
+
+    st.subheader("Advanced Analytics: PCA & Clustering")
+    st.plotly_chart(create_pca_scatter(df), use_container_width=True)
+
+    if available:
+        fig = go.Figure()
+        for dim in available:
+            fig.add_trace(go.Box(y=df[dim], name=dim.replace('_',' '), boxpoints='all', jitter=0.3, pointpos=-1.8))
+        fig.update_layout(title=dict(text="Dimension Score Distribution",x=0.5),
+                          yaxis=dict(title=dict(text="Score (0-100)"),range=[0,100]),
+                          height=450, plot_bgcolor='white', paper_bgcolor='white')
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Assessment Records")
+    display_cols = ['respondent_id','AIRI_composite','AIRI_band'] + available
+    display_df = df[[c for c in display_cols if c in df.columns]].copy()
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    st.markdown("<br><hr>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
+    with col1:
         if st.button("← Back to Results", use_container_width=True):
             st.session_state.page = 'results'; st.rerun()
-    with c2:
-        if st.button("🏠  Home", use_container_width=True):
+    with col2:
+        if st.button("🏠 Return to Home", use_container_width=True):
             st.session_state.page = 'home'; st.rerun()
+    with col3:
+        if st.button("🗑️ Clear My Data", use_container_width=True):
+            clear_assessment(); st.session_state.page = 'home'; st.rerun()
 
-# ── SIDEBAR ────────────────────────────────────────────────────────────────────
-def sidebar():
+
+def main():
+    configure_page()
+    init_session_state()
+
     with st.sidebar:
         st.markdown("""
-        <div style="text-align:center;padding:14px 0 8px 0;
-                    border-bottom:1px solid #cccccc;margin-bottom:12px;">
-            <p style="font-size:1.5rem;font-weight:700;margin:0;">🤖 AIRI</p>
-            <p style="font-size:0.82rem;color:#555555;margin:2px 0 0 0;">AI Readiness Index</p>
+        <div style="text-align:center;padding:20px 0;">
+            <h2 style="color:#1e3a5f;margin:0;">🤖 AIRI</h2>
+            <p style="color:#718096;font-size:0.9em;">AI Readiness Index</p>
         </div>""", unsafe_allow_html=True)
+        st.markdown("---")
 
-        nav = [("🏠  Home",'home'),("📝  Take Assessment",'survey'),
-               ("📊  My Results",'results'),("📈  Analytics Dashboard",'dashboard')]
-        for label, key in nav:
-            if st.button(label, use_container_width=True, key=f"nav_{key}"):
-                if key == 'results' and not st.session_state.get('done'):
-                    st.warning("Complete an assessment first.")
-                else:
-                    st.session_state.page = key; st.rerun()
+        if st.button("🏠 Home", use_container_width=True):
+            st.session_state.page = 'home'; st.rerun()
+        if st.button("📝 Take Assessment", use_container_width=True):
+            st.session_state.page = 'survey'; st.rerun()
+        if st.button("📊 My Results", use_container_width=True):
+            if st.session_state.assessment_complete and st.session_state.dimension_scores:
+                st.session_state.page = 'results'; st.rerun()
+            else:
+                st.warning("Complete an assessment first!")
+        if st.button("📈 Analytics Dashboard", use_container_width=True):
+            st.session_state.page = 'dashboard'; st.rerun()
 
         st.markdown("---")
         st.markdown("""
-        <div style="background:#f0f0f0;padding:12px;border-radius:4px;
-                    border-left:3px solid #007700;">
-            <p style="font-weight:700;font-size:0.88rem;margin:0 0 5px 0;">About AIRI</p>
-            <p style="font-size:0.8rem;color:#333333;margin:0;line-height:1.5;">
-                Quantitative diagnostic tool for UK debt management institutions.
-                Aligned with FCA Consumer Duty.
-                Validated by expert survey (n=121).
+        <div style="padding:15px;background:#ebf8ff;border-radius:8px;">
+            <h4 style="color:#2c5282;margin:0 0 10px 0;">About AIRI</h4>
+            <p style="color:#4a5568;font-size:0.85em;margin:0;">
+                The AI Readiness Index (AIRI) is a quantitative diagnostic tool
+                for UK debt management institutions to assess preparedness for
+                ethical AI agent deployment.
             </p>
         </div>
         <br>
-        <p style="font-size:0.75rem;color:#555555;text-align:center;margin:0;">
-            Bournemouth University<br>
-            MSc IT | COMP7024 | 2025/26<br>
-            Sedara Aanuoluwapo Endurance
+        <p style="color:#718096;font-size:0.8em;text-align:center;">
+            Bournemouth University | MSc IT<br>
+            COMP7024 | 2025/26<br>
+            FCA Consumer Duty Aligned
         </p>""", unsafe_allow_html=True)
 
-# ── MAIN ───────────────────────────────────────────────────────────────────────
-init()
-sidebar()
+    page = st.session_state.page
+    if page == 'home':      render_home()
+    elif page == 'survey':  render_survey()
+    elif page == 'results': render_results()
+    elif page == 'dashboard': render_dashboard()
+    else: render_home()
 
-page = st.session_state.page
-if   page == 'home':      pg_home()
-elif page == 'survey':    pg_survey()
-elif page == 'results':   pg_results()
-elif page == 'dashboard': pg_dashboard()
-else:                     pg_home()
+
+if __name__ == "__main__":
+    main()
